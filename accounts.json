@@ -1,0 +1,10 @@
+{
+	"beam": {
+		"user": "username",
+		"pass": "password"
+	},
+	"twitch": {
+		"user": "username",
+		"pass": "password"
+	}
+}
