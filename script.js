@@ -66,7 +66,7 @@ function getUsername(i, callback) {
 		case "twitch":
 			request("https://api.twitch.tv/kraken/users/" + i.name, function(error, response, body) {
 				if(!error && response.statusCode == 200) {
-					callback(JSON.parse(body).name);
+					callback(JSON.parse(body).display_name);
 				}
 			});
 			
