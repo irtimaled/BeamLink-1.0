@@ -99,14 +99,10 @@ function disconnectChats(i) {
 for(var i = 0; i < channels.length; i++) {
 	console.log(("Trying to connect to channels: " + channels[i].beam + " / " + channels[i].twitch).white);
 	beam.once("join#" + channels[i].beam, function(i) {
-		getUsername({site: "beam", name: channels[i].beam}, function(nick) {
-			console.log(("Connected to Beam channel: " + nick).cyan);
-		});
+		console.log(("Connected to Beam channel: " + channels[i].beam).cyan);
 	}.bind(this, i));
 	twitch.once("join#" + channels[i].twitch, function(i) {
-		getUsername({site: "beam", name: channels[i].twitch}, function(nick) {
-			console.log(("Connected to Twitch channel: " + nick).magenta);
-		});
+		console.log(("Connected to Twitch channel: " + channels[i].twitch).magenta);
 	}.bind(this, i));
 	
 	connectChats({beam: channels[i].beam, twitch: channels[i].twitch});
@@ -119,7 +115,9 @@ beam.on("message", function(nick, to, text) {
 		beam.part("#" + nick.toLowerCase());
 		twitch.part("#" + channels[i].twitch);
 		
-		beam.say(to, "Chats unlinked.");
+		if(to != "#" + nick.toLowerCase()) {
+			beam.say(to, "Chats unlinked.");
+		}
 		beam.say("#" + nick.toLowerCase(), "Chats unlinked.");
 		twitch.say("#" + channels[i].twitch, "Chats unlinked.");
 		console.log(("Unlinked channels: " + nick.toLowerCase() + " / " + channels[i].twitch).green);
@@ -136,7 +134,9 @@ twitch.on("message", function(nick, to, text) {
 		twitch.part("#" + nick.toLowerCase());
 		beam.part("#" + channels[i].beam);
 		
-		twitch.say(to, "Chats unlinked.");
+		if(to != "#" + nick.toLowerCase()) {
+			twitch.say(to, "Chats unlinked.");
+		}
 		twitch.say("#" + nick.toLowerCase(), "Chats unlinked.");
 		beam.say("#" + channels[i].beam, "Chats unlinked.");
 		console.log(("Unlinked channels: " + channels[i].beam + " / " + nick.toLowerCase()).green);
@@ -187,12 +187,11 @@ beam.on("message", function(nick, to, text) {
 	if(to.slice(0, 1) == "#") {
 		if(nick != accounts.beam.user) {
 			if(to == "#" + accounts.beam.user) {
-				getUsername({site: "beam", name: nick}, function(nick) {
-					console.log(("  [beam" + to + "] " + nick + ": " + text).white);
-				});
+				console.log(("  [beam" + to + "] " + nick + ": " + text).white);
 			} else {
+				console.log(("    [beam" + to + "] " + nick + ": " + text).grey);
+				
 				getUsername({site: "beam", name: nick}, function(nick) {
-					console.log(("    [beam" + to + "] " + nick + ": " + text).grey);
 					beam.say("#" + accounts.beam.user, "[<beam" + to + "> " + nick + "] " + text);
 				});
 			}
@@ -205,12 +204,11 @@ twitch.on("message", function(nick, to, text) {
 	if(to.slice(0, 1) == "#") {
 		if(nick != accounts.twitch.user) {
 			if(to == "#" + accounts.twitch.user) {
-				getUsername({site: "twitch", name: nick}, function(nick) {
-					console.log(("  [twitch" + to + "] " + nick + ": " + text).white);
-				});
+				console.log(("  [twitch" + to + "] " + nick + ": " + text).white);
 			} else {
+				console.log(("    [twitch" + to + "] " + nick + ": " + text).grey);
+				
 				getUsername({site: "twitch", name: nick}, function(nick) {
-					console.log(("    [twitch" + to + "] " + nick + ": " + text).grey);
 					beam.say("#" + accounts.twitch.user, "[<twitch" + to + "> " + nick + "] " + text);
 				});
 			}
