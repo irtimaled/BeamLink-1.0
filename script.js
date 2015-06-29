@@ -7,11 +7,13 @@ var request = require("request");
 var accounts = JSON.parse(fs.readFileSync("accounts.json", "utf8"));
 var channels = JSON.parse(fs.readFileSync("channels.json", "utf8"));
 var wttwitch = {};
-// var wtbeam = {};
+var usernames = {
+	beam: {},
+	twitch: {}
+};
 
 // Connections to Beam and Twitch.
 var beam = new irc.Client("benbaptist.com", accounts.beam.user, {
-	// debug: true,
 	port: 40005,
 	userName: "beamlink",
 	realName: "BeamLink",
@@ -26,7 +28,6 @@ var beam = new irc.Client("benbaptist.com", accounts.beam.user, {
 	}())
 });
 var twitch = new irc.Client("irc.twitch.tv", accounts.twitch.user, {
-	// debug: true,
 	port: 6667,
 	userName: "beamlink",
 	realName: "BeamLink",
@@ -56,19 +57,29 @@ function chanIndex(i) {
 function getUsername(i, callback) {
 	switch(i.site) {
 		case "beam":
-			request("https://beam.pro/api/v1/users/search?query=" + i.name, function(error, response, body) {
-				if(!error && response.statusCode == 200) {
-					callback(JSON.parse(body)[0].username);
-				}
-			});
+			if(usernames.beam[i.name]) {
+				callback(usernames.beam[i.name]);
+			} else {
+				request("https://beam.pro/api/v1/users/search?query=" + i.name, function(error, response, body) {
+					if(!error && response.statusCode == 200) {
+						usernames.beam[i.name] = JSON.parse(body)[0].username;
+						callback(JSON.parse(body)[0].username);
+					}
+				});
+			}
 			
 			break;
 		case "twitch":
-			request("https://api.twitch.tv/kraken/users/" + i.name, function(error, response, body) {
-				if(!error && response.statusCode == 200) {
-					callback(JSON.parse(body).display_name);
-				}
-			});
+			if(usernames.twitch[i.name]) {
+				callback(usernames.twitch[i.name]);
+			} else {
+				request("https://api.twitch.tv/kraken/users/" + i.name, function(error, response, body) {
+					if(!error && response.statusCode == 200) {
+						usernames.twitch[i.name] = JSON.parse(body).display_name;
+						callback(JSON.parse(body).display_name);
+					}
+				});
+			}
 			
 			break;
 	}
@@ -177,7 +188,9 @@ beam.on("message#" + accounts.beam.user, function(nick, text) {
 				}
 			});
 		} else {
-			beam.say("#" + accounts.beam.user, "@" + nick + ": One or both of your channels are already linked. Type \"!unlink\" on Beam or Twitch if you want to unlink them.");
+			getUsername({site: "beam", name: nick}, function(nick) {
+				beam.say("#" + accounts.beam.user, "@" + nick + ": One or both of your channels are already linked. Type \"!unlink\" on Beam or Twitch if you want to unlink them.");
+			});
 		}
 	}
 });
