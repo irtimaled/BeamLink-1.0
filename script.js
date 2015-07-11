@@ -119,42 +119,58 @@ for(var i = 0; i < channels.length; i++) {
 	connectChats({beam: channels[i].beam, twitch: channels[i].twitch});
 }
 
+// Reconnect when disconnected.
+beam.on("part", function(channel, nick, reason, message) {
+	if(chanIndex({prop: "beam", string: channel.slice(1)}) > -1) {
+		console.log(("Reconnect to beam" + channel + "...").yellow);
+		
+		beam.join(channel);
+	}
+});
+twitch.on("part", function(channel, nick, reason, message) {
+	if(chanIndex({prop: "twitch", string: channel.slice(1)}) > -1) {
+		console.log(("Reconnect to twitch" + channel + "...").yellow);
+		
+		twitch.join(channel);
+	}
+});
+
 // Unlink chats with command.
 beam.on("message", function(nick, to, text) {
-	var i = chanIndex({prop: "beam", string: nick.toLowerCase()});
+	var i = chanIndex({prop: "beam", string: nick});
 	if(text == "!unlink" && i > -1) {
-		beam.part("#" + nick.toLowerCase());
-		twitch.part("#" + channels[i].twitch);
-		
-		if(to != "#" + nick.toLowerCase()) {
+		if(to != "#" + nick) {
 			beam.say(to, "Chats unlinked.");
 		}
-		beam.say("#" + nick.toLowerCase(), "Chats unlinked.");
+		beam.say("#" + nick, "Chats unlinked.");
 		twitch.say("#" + channels[i].twitch, "Chats unlinked.");
-		console.log(("Unlinked channels: " + nick.toLowerCase() + " / " + channels[i].twitch).green);
-		beam.say("#" + accounts.beam.user, "Unlinked channels: " + nick.toLowerCase() + " / " + channels[i].twitch);
+		console.log(("Unlinked channels: " + nick + " / " + channels[i].twitch).green);
+		beam.say("#" + accounts.beam.user, "Unlinked channels: " + nick + " / " + channels[i].twitch);
 		
-		disconnectChats({beam: nick.toLowerCase(), twitch: channels[i].twitch});
+		disconnectChats({beam: nick, twitch: channels[i].twitch});
+		
 		channels.splice(i, 1);
+		beam.part("#" + nick);
+		twitch.part("#" + channels[i].twitch);
 		fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
 	}
 });
 twitch.on("message", function(nick, to, text) {
-	var i = chanIndex({prop: "twitch", string: nick.toLowerCase()});
+	var i = chanIndex({prop: "twitch", string: nick});
 	if(text == "!unlink" && i > -1) {
-		twitch.part("#" + nick.toLowerCase());
-		beam.part("#" + channels[i].beam);
-		
-		if(to != "#" + nick.toLowerCase()) {
+		if(to != "#" + nick) {
 			twitch.say(to, "Chats unlinked.");
 		}
-		twitch.say("#" + nick.toLowerCase(), "Chats unlinked.");
+		twitch.say("#" + nick, "Chats unlinked.");
 		beam.say("#" + channels[i].beam, "Chats unlinked.");
-		console.log(("Unlinked channels: " + channels[i].beam + " / " + nick.toLowerCase()).green);
-		beam.say("#" + accounts.twitch.user, "Unlinked channels: " + channels[i].beam + " / " + nick.toLowerCase());
+		console.log(("Unlinked channels: " + channels[i].beam + " / " + nick).green);
+		beam.say("#" + accounts.twitch.user, "Unlinked channels: " + channels[i].beam + " / " + nick);
 		
-		disconnectChats({beam: channels[i].beam, twitch: nick.toLowerCase()});
+		disconnectChats({beam: channels[i].beam, twitch: nick});
+		
 		channels.splice(i, 1);
+		twitch.part("#" + nick);
+		beam.part("#" + channels[i].beam);
 		fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
 	}
 });
@@ -162,28 +178,28 @@ twitch.on("message", function(nick, to, text) {
 // Link chats with command.
 beam.on("message#" + accounts.beam.user, function(nick, text) {
 	if(text.slice(0, 5) == "!link" && !wttwitch[text.slice(6).toLowerCase()]) {
-		if(chanIndex({prop: "beam", string: nick.toLowerCase()}) == -1 && chanIndex({prop: "twitch", string: text.slice(6).toLowerCase()}) == -1) {
+		if(chanIndex({prop: "beam", string: nick}) == -1 && chanIndex({prop: "twitch", string: text.slice(6).toLowerCase()}) == -1) {
 			getUsername({site: "beam", name: nick}, function(nick) {
 				beam.say("#" + accounts.beam.user, "@" + nick + ": Watching " + text.slice(6) + "'s chat on Twitch. Go to your channel and type \"!link\" to confirm.");
 			});
-			wttwitch[text.slice(6).toLowerCase()] = nick.toLowerCase();
+			wttwitch[text.slice(6).toLowerCase()] = nick;
 			twitch.join("#" + text.slice(6).toLowerCase());
 			twitch.say("#" + text.slice(6).toLowerCase(), "I have been asked to link this Twitch chat with a Beam chat. If you requested this, type \"!link\".");
 			twitch.removeAllListeners("message#" + text.slice(6).toLowerCase());
 			
 			twitch.on("message#" + text.slice(6).toLowerCase(), function(nick, text) {
-				if(text == "!link" && wttwitch[nick.toLowerCase()]) {
-					twitch.removeAllListeners("message#" + nick.toLowerCase());
-					beam.join("#" + wttwitch[nick.toLowerCase()], function(nick) {
-						beam.say("#" + wttwitch[nick.toLowerCase()], "Chats linked.");
-						twitch.say("#" + nick.toLowerCase(), "Chats linked.");
-						console.log(("Linked channels: " + wttwitch[nick.toLowerCase()] + " / " + nick.toLowerCase()).green);
-						beam.say("#" + accounts.beam.user, "Linked channels: " + wttwitch[nick.toLowerCase()] + " / " + nick.toLowerCase());
+				if(text == "!link" && wttwitch[nick]) {
+					twitch.removeAllListeners("message#" + nick);
+					beam.join("#" + wttwitch[nick], function(nick) {
+						beam.say("#" + wttwitch[nick], "Chats linked.");
+						twitch.say("#" + nick, "Chats linked.");
+						console.log(("Linked channels: " + wttwitch[nick] + " / " + nick).green);
+						beam.say("#" + accounts.beam.user, "Linked channels: " + wttwitch[nick] + " / " + nick);
 						
-						connectChats({beam: wttwitch[nick.toLowerCase()], twitch: nick.toLowerCase()});
-						channels.push({beam: wttwitch[nick.toLowerCase()], twitch: nick.toLowerCase()});
+						connectChats({beam: wttwitch[nick], twitch: nick});
+						channels.push({beam: wttwitch[nick], twitch: nick});
 						fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
-						delete wttwitch[nick.toLowerCase()];
+						delete wttwitch[nick];
 					}.bind(this, nick));
 				}
 			});
