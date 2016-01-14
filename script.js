@@ -207,8 +207,7 @@ function getUsername(i, callback) {
 
 function connectChats(i) {
 	twitch.on("message#" + i.twitch.toLowerCase(), function(nick, text) {
-		console.log(nick,text)
-		if(nick != accounts.twitch.user) {
+		if(nick.toLowerCase() != accounts.twitch.user.toLowerCase()) {
 			getUsername({site: "twitch", name: nick}, function(nick) { // HIS NAME IS NICK!
 				console.log('sending beam message');
 				sendBeamMessage(i.beam, "[" + nick + "] " + text);
@@ -219,7 +218,7 @@ function connectChats(i) {
 		beamSockets[i.beam].on("ChatMessage", function(data){
 			var nick = data.user_name;
 			var text = flattenBeamMessage(data.message.message);
-			if(nick != accounts.beam.user) {
+			if(nick.toLowerCase() != accounts.beam.user.toLowerCase()) {
 				getUsername({site: "beam", name: nick}, function(nick) { // HIS NAME IS ALSO NICK!
 					twitch.say("#" + i.twitch, "[" + nick + "] " + text);
 				});
@@ -332,7 +331,7 @@ twitch.on("message", function(nick, to, text) {
 
 twitch.on("message", function(nick, to, text) {
 	if(to.slice(0, 1) == "#") {
-		if(nick != accounts.twitch.user) {
+		if(nick.toLowerCase() != accounts.twitch.user.toLowerCase()) {
 			if(to == "#" + accounts.twitch.user) {
 				console.log(("    [twitch" + to + "] " + nick + ": " + text).white);
 			} else {
