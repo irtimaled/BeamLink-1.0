@@ -1,0 +1,27 @@
+{
+  "name": "beamlink",
+  "version": "1.0.0",
+  "description": "Link your stream chats",
+  "main": "script.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ProbablePrime/BeamLink-1.0.git"
+  },
+  "author": "Tromino",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ProbablePrime/BeamLink-1.0/issues"
+  },
+  "homepage": "https://github.com/ProbablePrime/BeamLink-1.0#readme",
+  "dependencies": {
+    "beam-client-node": "^0.1.0",
+    "colors": "^1.1.2",
+    "ent": "^2.2.0",
+    "fs": "0.0.2",
+    "irc": "^0.4.0",
+    "request": "^2.67.0"
+  }
+}
