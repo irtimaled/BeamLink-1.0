@@ -24,14 +24,11 @@ var beamSockets = {};
 var beamIDs = {};
 var beamChannelNames = {};
 
-//I guess you're config file is full of channels with hashes
-//They are invalid for Beam
 function removeHash(channelName) {
 	return channelName.replace('#','');
 }
 
 function closeBeamChat(channelName) {
-	console.log(channelName);
 	if(beamSockets[channelName]) {
 		beamSockets[channelName].close();
 		beamSockets[channelName] = null;
@@ -93,15 +90,15 @@ function onBeamMessage(channelName,data) {
 	}
 	if(nick != accounts.beam.user) {
 		if(channelName == accounts.beam.user) {
-			console.log(("  [beam" + channelName + "] " + nick + ": " + text).white);
+			console.log(("    [beam" + channelName + "] " + nick + ": " + text).white);
 		} else {
-			console.log(("[beam" + channelName + "] " + nick + ": " + text).grey);
+			console.log(("    [beam" + channelName + "] " + nick + ": " + text).grey);
 			getUsername({site: "beam", name: nick}, function(nick) {
 				sendBeamMessage(accounts.beam.user, "[<beam" + channelName + "> " + nick + "] " + text);
 			});
 		}
 	} else {
-		console.log(("[beam] " + text).yellow);
+		console.log(("    [beam] " + text).yellow);
 	}
 }
 
@@ -159,7 +156,6 @@ var twitch = new irc.Client("irc.twitch.tv", accounts.twitch.user, {
 	password: accounts.twitch.pass,
 	floodProtection: true,
 	floodProtectionDelay: 1500,
-	
 	channels: (function() {
 		var i = ["#" + accounts.twitch.user];
 		for(var j = 0; j < channels.length; j++) {
@@ -193,7 +189,6 @@ function getUsername(i, callback) {
 					}
 				});
 			}
-			
 			break;
 		case "twitch":
 			if(usernames.twitch[i.name]) {
@@ -256,7 +251,6 @@ twitch.on("part", function(channel, nick, reason, message) {
 		twitch.join(channel);
 	}
 });
-//Beam does this automatically
 
 function extractTextFromMessagePart(part) {
 	if (part == undefined) {
@@ -303,7 +297,6 @@ function flattenBeamMessage(message) {
 
 //Beam.say is not longer valid, we need to find the correct socket and use that
 function sendBeamMessage(channel,message) {
-	console.log('Sending '+message+' to '+ channel);
 	var socket = beamSockets[channel];
 	if(socket) {
 		socket.call('msg',[message]);
@@ -322,13 +315,15 @@ twitch.on("message", function(nick, to, text) {
 		twitch.say("#" + nick, "Chats unlinked.");
 		sendBeamMessage(channels[i].beam, "Chats unlinked.");
 		console.log(("Unlinked channels: " + channels[i].beam + " / " + nick).green);
-		send(accounts.twitch.user, "Unlinked channels: " + channels[i].beam + " / " + nick);
+		sendBeamMessage(accounts.twitch.user, "Unlinked channels: " + channels[i].beam + " / " + nick);
 
 		disconnectChats({beam: channels[i].beam, twitch: nick});
 
 		channels.splice(i, 1);
 		twitch.part("#" + nick);
-		beam.part("#" + channels[i].beam);
+		if (channels[i]) {
+			closeBeamChat(channels[i].beam);
+		}
 		fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
 	}
 });
@@ -339,7 +334,7 @@ twitch.on("message", function(nick, to, text) {
 	if(to.slice(0, 1) == "#") {
 		if(nick != accounts.twitch.user) {
 			if(to == "#" + accounts.twitch.user) {
-				console.log(("  [twitch" + to + "] " + nick + ": " + text).white);
+				console.log(("    [twitch" + to + "] " + nick + ": " + text).white);
 			} else {
 				console.log(("    [twitch" + to + "] " + nick + ": " + text).grey);
 				getUsername({site: "twitch", name: nick}, function(nick) {
@@ -348,6 +343,6 @@ twitch.on("message", function(nick, to, text) {
 			}
 		}
 	} else {
-		console.log(("[twitch] " + text).yellow);
+		console.log(("    [twitch] " + text).yellow);
 	}
 });
