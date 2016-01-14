@@ -30,6 +30,14 @@ function removeHash(channelName) {
 	return channelName.replace('#','');
 }
 
+function closeBeamChat(channelName) {
+	console.log(channelName);
+	if(beamSockets[channelName]) {
+		beamSockets[channelName].close();
+		beamSockets[channelName] = null;
+	}
+}
+
 function onBeamMessage(channelName,data) {
 	var message = flattenBeamMessage(data.message.message);
 	var nick = data.user_name;
@@ -37,24 +45,25 @@ function onBeamMessage(channelName,data) {
 	var to = channelName;
 	var text = message;
 	if(message === '!unlink' && beamIndex > -1) {
-		sendBeamMesage(nick, "Chats unlinked");
-		twitch.say("#" + channels[i].twitch, "Chats unlinked.");
+		sendBeamMessage(nick, "Chats unlinked");
+		twitch.say("#" + channels[beamIndex].twitch, "Chats unlinked.");
 
-		console.log(("Unlinked channels: " + nick + " / " + channels[i].twitch).green);
-		sendBeamMesage(accounts.beam.user, "Unlinked channels: " + nick + " / " + channels[i].twitch)
+		console.log(("Unlinked channels: " + nick + " / " + channels[beamIndex].twitch).green);
+		sendBeamMessage(accounts.beam.user, "Unlinked channels: " + nick + " / " + channels[beamIndex].twitch)
 
-		disconnectChats({beam: nick, twitch: channels[i].twitch});
+		disconnectChats({beam: nick, twitch: channels[beamIndex].twitch});
 
-		channels.splice(i, 1);
-		beamSockets[channelName].close();
-		beamSockets[channelName] = null;
-		twitch.part("#" + channels[i].twitch);
+		channels.splice(beamIndex, 1);
+		closeBeamChat(channelName);
+		if(channels[channelName]) {
+			twitch.part("#" + channels[beamIndex].twitch);
+		}
 		fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
 	}
 	if(text.slice(0, 5) == "!link" && !wttwitch[text.slice(6).toLowerCase()]) {
 		if(beamIndex == -1 && chanIndex({prop: "twitch", string: message.slice(6).toLowerCase()}) == -1) {
 			getUsername({site: "beam", name: nick}, function(nick) {
-				beam.say("#" + accounts.beam.user, "@" + nick + ": Watching " + text.slice(6) + "'s chat on Twitch. Go to your channel and type \"!link\" to confirm.");
+				sendBeamMessage(accounts.beam.user, "@" + nick + ": Watching " + text.slice(6) + "'s chat on Twitch. Go to your channel and type \"!link\" to confirm.");
 			});
 			wttwitch[text.slice(6).toLowerCase()] = nick;
 			twitch.join("#" + text.slice(6).toLowerCase());
@@ -65,7 +74,7 @@ function onBeamMessage(channelName,data) {
 				if(text == "!link" && wttwitch[nick]) {
 					twitch.removeAllListeners("message#" + nick);
 					joinChannel(wttwitch[nick]).then(function(){
-						sendBeamMesage(wttwitch[nick], "Chats Linked");
+						sendBeamMessage(wttwitch[nick], "Chats Linked");
 						twitch.say("#" + nick, "Chats linked.");
 						console.log(("Linked channels: " + wttwitch[nick] + " / " + nick).green);
 						sendBeamMessage(accounts.beam.user, "Linked channels: " + wttwitch[nick] + " / " + nick);
@@ -78,7 +87,7 @@ function onBeamMessage(channelName,data) {
 			});
 		} else {
 			getUsername({site: "beam", name: nick}, function(nick) {
-				sendBeamMesage(accounts.beam.user, "@" + nick + ": One or both of your channels are already linked. Type \"!unlink\" on Beam or Twitch if you want to unlink them.");
+				sendBeamMessage(accounts.beam.user, "@" + nick + ": One or both of your channels are already linked. Type \"!unlink\" on Beam or Twitch if you want to unlink them.");
 			});
 		}
 	}
@@ -86,9 +95,9 @@ function onBeamMessage(channelName,data) {
 		if(channelName == accounts.beam.user) {
 			console.log(("  [beam" + channelName + "] " + nick + ": " + text).white);
 		} else {
-			console.log(("    [beam" + channelName + "] " + nick + ": " + text).grey);
+			console.log(("[beam" + channelName + "] " + nick + ": " + text).grey);
 			getUsername({site: "beam", name: nick}, function(nick) {
-				sendBeamMesage(accounts.beam.user, "[<beam" + channelName + "> " + nick + "] " + text);
+				sendBeamMessage(accounts.beam.user, "[<beam" + channelName + "> " + nick + "] " + text);
 			});
 		}
 	} else {
@@ -99,7 +108,6 @@ function onBeamMessage(channelName,data) {
 //To join a channel we need its id, then we need the ws address and an authkey.
 //This handles them all
 function joinChannel(channelName) {
-	console.log('joining ' + channelName);
 	channelName = removeHash(channelName);
 	//we need the channel id.
 	return beam.request('get', '/channels/' + channelName).bind(this)
@@ -110,7 +118,6 @@ function joinChannel(channelName) {
 	}).then(function(response){
 		beamSockets[channelName] = new BeamSocket(response.body.endpoints).boot();
 		beamSockets[channelName].on('ChatMessage', onBeamMessage.bind(this, channelName));
-		console.log(beamIDs[channelName], accounts.beam.id, response.body.authkey);
 		return beamSockets[channelName].call('auth', [beamIDs[channelName], accounts.beam.id, response.body.authkey])
 		.then(function(){
 			console.log(("Connected to Beam channel: " + channelName).cyan);
@@ -130,7 +137,7 @@ beam.use('password', {
 	password: accounts.beam.pass
 }).attempt()
 .then(function(response) {
-	console.log('connected to beam');
+	console.log(('Connected to beam').cyan);
 	accounts.beam.id = response.body.id;
 	joinChannel(accounts.beam.user);
 	connectToChannels();
@@ -204,10 +211,11 @@ function getUsername(i, callback) {
 }
 
 function connectChats(i) {
-	console.log('connectChats');
-	twitch.on("message#" + i.twitch, function(nick, text) {
+	twitch.on("message#" + i.twitch.toLowerCase(), function(nick, text) {
+		console.log(nick,text)
 		if(nick != accounts.twitch.user) {
 			getUsername({site: "twitch", name: nick}, function(nick) { // HIS NAME IS NICK!
+				console.log('sending beam message');
 				sendBeamMessage(i.beam, "[" + nick + "] " + text);
 			});
 		}
@@ -224,11 +232,10 @@ function connectChats(i) {
 		});
 	});
 }
+
 function disconnectChats(i) {
 	twitch.removeAllListeners("message#" + i.twitch);
-	beamSockets[i.beam].close();
-	beamSockets[i.beam] = null;
-	beam.removeAllListeners("message#" + i.beam);
+	closeBeamChat(i.beam);
 }
 
 //We need to delay this until after beam is logged in
@@ -236,11 +243,8 @@ function connectToChannels() {
 	// Connection logging and stuff.
 	for(var i = 0; i < channels.length; i++) {
 		console.log(("Trying to connect to channels: " + channels[i].beam + " / " + channels[i].twitch).white);
-		//joinChannel(channels[i].beam);
-		twitch.once("join#" + channels[i].twitch, function(i) {
-			console.log(("Connected to Twitch channel: " + channels[i].twitch).magenta);
-		}.bind(this, i));
-		
+		twitch.join('#'+channels[i].twitch.toLowerCase());
+		console.log(("Connected to Twitch channel: " + channels[i].twitch).magenta);
 		connectChats({beam: channels[i].beam, twitch: channels[i].twitch});
 	}
 }
@@ -298,7 +302,8 @@ function flattenBeamMessage(message) {
 }
 
 //Beam.say is not longer valid, we need to find the correct socket and use that
-function sendBeamMesage(channel,message) {
+function sendBeamMessage(channel,message) {
+	console.log('Sending '+message+' to '+ channel);
 	var socket = beamSockets[channel];
 	if(socket) {
 		socket.call('msg',[message]);
@@ -315,12 +320,12 @@ twitch.on("message", function(nick, to, text) {
 			twitch.say(to, "Chats unlinked.");
 		}
 		twitch.say("#" + nick, "Chats unlinked.");
-		beam.say("#" + channels[i].beam, "Chats unlinked.");
+		sendBeamMessage(channels[i].beam, "Chats unlinked.");
 		console.log(("Unlinked channels: " + channels[i].beam + " / " + nick).green);
-		beam.say("#" + accounts.twitch.user, "Unlinked channels: " + channels[i].beam + " / " + nick);
-		
+		send(accounts.twitch.user, "Unlinked channels: " + channels[i].beam + " / " + nick);
+
 		disconnectChats({beam: channels[i].beam, twitch: nick});
-		
+
 		channels.splice(i, 1);
 		twitch.part("#" + nick);
 		beam.part("#" + channels[i].beam);
@@ -338,7 +343,7 @@ twitch.on("message", function(nick, to, text) {
 			} else {
 				console.log(("    [twitch" + to + "] " + nick + ": " + text).grey);
 				getUsername({site: "twitch", name: nick}, function(nick) {
-					beam.say("#" + accounts.twitch.user, "[<twitch" + to + "> " + nick + "] " + text);
+					sendBeamMessage(accounts.twitch.user, "[<twitch" + to + "> " + nick + "] " + text);
 				});
 			}
 		}
