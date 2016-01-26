@@ -236,8 +236,13 @@ function connectToChannels() {
 	// Connection logging and stuff.
 	for(var i = 0; i < channels.length; i++) {
 		console.log(("Trying to connect to channels: " + channels[i].beam + " / " + channels[i].twitch).white);
-		twitch.join('#'+channels[i].twitch.toLowerCase());
-		console.log(("Connected to Twitch channel: " + channels[i].twitch).magenta);
+		//Don't call .join here, the connections array passed in the IRC constructor above will handle that
+		twitch.once("join#" + channels[i].twitch, function(i) {
+			console.log(("Connected to Twitch channel: " + channels[i].twitch).magenta);
+		}.bind(this, i));
+		//Do manually connect to beam though because it does require some extra lifting
+		//TODO: Beam might have rate limits, If so delay the execution of this method
+		//by x ms
 		connectChats({beam: channels[i].beam, twitch: channels[i].twitch});
 	}
 }
