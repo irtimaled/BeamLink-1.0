@@ -198,6 +198,10 @@ var twitch = new irc.Client("irc.twitch.tv", accounts.twitch.user, {
 		return i;
 	}())
 });
+//Prevent crashes, if there are no listeners to an "error" event it will crash
+twitch.addListener("error", function(message) {
+	console.log(("Twitch Error: ", message).red);
+});
 
 // Functions for stuff.
 function chanIndex(i) {
