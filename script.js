@@ -100,6 +100,37 @@ function onBeamMessage(channelName,data) {
 		console.log(("    [beam] " + text).yellow);
 	}
 }
+/**
+ * Called when a beam socket emits "Close"
+ * @param  {String} channelName The closed Channel
+ */
+function onSocketClose(channelName) {
+	console.log(("Disconnected from Beam channe: " + channelName).yellow);
+	var i = chanIndex({prop: "beam", string: channelName});
+	//Check if we still actually care about this channel. We might catch "close"
+	//events on a channel that has been !unliked
+	if (i === -1) {
+		return;
+	}
+	var socket = beamSockets[channelName];
+
+	//if we don't have a socket, just reconnect as though it was fresh channel
+	if (!socket) {
+		joinChannel(channelName);
+		return;
+	}
+
+	//BeamSocket's emit error and close events but will
+	//automaticlaly try and reconnect on error but not on close.
+	//If this is the case we'll see the connecting status here
+	if (socket.status === BeamSocket.CONNECTING) {
+		//Hey we are already reconnecting we don't need to do anything.
+		//if we ever see CLOSED here it means everything else has given up
+		return;
+	}
+	//This then re-spins up the websocket.
+	socket.boot();
+}
 
 //To join a channel we need its id, then we need the ws address and an authkey.
 //This handles them all
@@ -114,7 +145,10 @@ function joinChannel(channelName) {
 	}).then(function(response){
 		beamSockets[channelName] = new BeamSocket(response.body.endpoints).boot();
 		beamSockets[channelName].on('ChatMessage', onBeamMessage.bind(this, channelName));
-		return beamSockets[channelName].call('auth', [beamIDs[channelName], accounts.beam.id, response.body.authkey])
+		beamSockets[channelName].on('close', onSocketClose.bind(this,channelName));
+
+		return beamSockets[channelName]
+		.call('auth', [beamIDs[channelName], accounts.beam.id, response.body.authkey])
 		.then(function(){
 			console.log(("Connected to Beam channel: " + channelName).cyan);
 		}).catch(function(err){
@@ -305,7 +339,6 @@ function sendBeamMessage(channel,message) {
 		socket.call('msg',[message]);
 	}
 }
-
 
 //We should probably combine these tooo!
 //Unlink
