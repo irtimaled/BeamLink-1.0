@@ -145,7 +145,7 @@ function joinChannel(channelName) {
 	}).then(function(response){
 		beamSockets[channelName] = new BeamSocket(response.body.endpoints).boot();
 		beamSockets[channelName].on('ChatMessage', onBeamMessage.bind(this, channelName));
-		beamSockets[channelName].on('close', onSocketClose.bind(this,channelName));
+		beamSockets[channelName].on('closed', onSocketClose.bind(this,channelName));
 
 		return beamSockets[channelName]
 		.call('auth', [beamIDs[channelName], accounts.beam.id, response.body.authkey])
