@@ -105,7 +105,7 @@ function onBeamMessage(channelName,data) {
  * @param  {String} channelName The closed Channel
  */
 function onSocketClose(channelName) {
-	console.log(("Disconnected from Beam channe: " + channelName).yellow);
+	console.log(("Disconnected from Beam channel: " + channelName +" attemping to reconnect.").yellow);
 	var i = chanIndex({prop: "beam", string: channelName});
 	//Check if we still actually care about this channel. We might catch "close"
 	//events on a channel that has been !unliked
