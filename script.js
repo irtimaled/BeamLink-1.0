@@ -108,8 +108,10 @@ function onSocketClose(channelName) {
 	console.log(("Disconnected from Beam channel: " + channelName +" attemping to reconnect.").yellow);
 	var i = chanIndex({prop: "beam", string: channelName});
 	//Check if we still actually care about this channel. We might catch "close"
-	//events on a channel that has been !unliked
-	if (i === -1) {
+	//events on a channel that has been !unliked.
+	//We also check if this is the account we are running under aka "StreamLink_"
+	//If this is the case we don't want to stop here
+	if (i === -1 && channelName.toLowerCase() !== accounts.beam.username.toLowerCase()) {
 		return;
 	}
 	var socket = beamSockets[channelName];
@@ -120,9 +122,10 @@ function onSocketClose(channelName) {
 		return;
 	}
 
-	//BeamSocket's emit error and close events but will
+	//BeamSockets emit error and close events but will
 	//automaticlaly try and reconnect on error but not on close.
 	//If this is the case we'll see the connecting status here
+	//As the socket is already reconnecting
 	if (socket.status === BeamSocket.CONNECTING) {
 		//Hey we are already reconnecting we don't need to do anything.
 		//if we ever see CLOSED here it means everything else has given up
