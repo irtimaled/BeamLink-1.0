@@ -220,16 +220,9 @@ function chanIndex(i) {
 function getUsername(i, callback) {
 	switch(i.site) {
 		case "beam":
-			if(usernames.beam[i.name]) {
-				callback(usernames.beam[i.name]);
-			} else {
-				request("https://beam.pro/api/v1/users/search?query=" + i.name, function(error, response, body) {
-					if(!error && response.statusCode == 200) {
-						usernames.beam[i.name] = JSON.parse(body)[0].username;
-						callback(JSON.parse(body)[0].username);
-					}
-				});
-			}
+			// Beam sends us the username correctly capitalized etc
+			// we don't need to hit their limits
+			callback(i.name);
 			break;
 		case "twitch":
 			if(usernames.twitch[i.name]) {
