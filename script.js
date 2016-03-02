@@ -55,7 +55,9 @@ function onBeamMessage(channelName,data) {
 		if(channels[channelName]) {
 			twitch.part("#" + channels[beamIndex].twitch);
 		}
-		fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
+		fs.rename("channels.json", "channels-bak-" + +new Date() + ".json", function() {
+			fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
+		});
 	}
 	if(text.slice(0, 5) == "!link" && !wttwitch[text.slice(6).toLowerCase()]) {
 		if(beamIndex == -1 && chanIndex({prop: "twitch", string: message.slice(6).toLowerCase()}) == -1) {
@@ -76,7 +78,9 @@ function onBeamMessage(channelName,data) {
 						console.log(("Linked channels: " + wttwitch[nick] + " / " + nick).green);
 						sendBeamMessage(accounts.beam.user, "Linked channels: " + wttwitch[nick] + " / " + nick);
 						channels.push({beam: wttwitch[nick], twitch: nick});
-						fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
+						fs.rename("channels.json", "channels-bak-" + +new Date() + ".json", function() {
+							fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
+						});
 						delete wttwitch[nick];
 					});
 				}
@@ -360,7 +364,9 @@ twitch.on("message", function(nick, to, text) {
 		if (channels[i]) {
 			closeBeamChat(channels[i].beam);
 		}
-		fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
+		fs.rename("channels.json", "channels-bak-" + +new Date() + ".json", function() {
+			fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
+		});
 	}
 });
 
