@@ -3,6 +3,12 @@ var irc = require("irc");
 var colors = require("colors");
 var fs = require("fs");
 var request = require("request");
+var ratelimit = require("./ratelimit.js");
+
+var bin = {};
+bin.glob = new ratelimit.Bin(1000, 5*60);
+bin.chread = new ratelimit.Bin(1000, 5*60);
+bin.chatreq = new ratelimit.Bin(500, 10*60);
 
 var Beam = require('beam-client-node');
 var BeamSocket = require('beam-client-node/lib/ws');
