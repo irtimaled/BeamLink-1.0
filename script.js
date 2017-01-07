@@ -121,7 +121,7 @@ function onSocketClose(channelName) {
 	//events on a channel that has been !unliked.
 	//We also check if this is the account we are running under aka "StreamLink_"
 	//If this is the case we don't want to stop here
-	if (i === -1 && channelName.toLowerCase() !== accounts.beam.username.toLowerCase()) {
+	if (i === -1 && channelName.toLowerCase() !== accounts.beam.user.toLowerCase()) {
 		return;
 	}
 	var socket = beamSockets[channelName];
