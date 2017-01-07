@@ -379,9 +379,9 @@ twitch.on("message", function(nick, to, text) {
 // Log chat messages.
 
 twitch.on("message", function(nick, to, text) {
-	if(to.slice(0, 1) == "#") {
-		if(nick.toLowerCase() != accounts.twitch.user.toLowerCase()) {
-			if(to == "#" + accounts.twitch.user) {
+	if(to.slice(0, 1) === "#") {
+		if(nick.toLowerCase() !== accounts.twitch.user.toLowerCase()) {
+			if(to.toLowerCase() === "#" + accounts.twitch.user.toLowerCase()) {
 				console.log(("    [twitch" + to + "] " + nick + ": " + text).white);
 			} else {
 				console.log(("    [twitch" + to + "] " + nick + ": " + text).grey);
