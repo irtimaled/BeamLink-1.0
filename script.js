@@ -1,37 +1,48 @@
 // Variables and requires and stuff.
-var irc = require("irc");
 var colors = require("colors");
 var fs = require("fs");
 var request = require("request");
-var ratelimit = require("./ratelimit.js");
-
-var bin = {};
-bin.glob = new ratelimit.Bin(1000, 5*60);
-bin.chread = new ratelimit.Bin(1000, 5*60);
-bin.chatreq = new ratelimit.Bin(500, 10*60);
+var tmi = require("tmi.js");
+var debug = false;
 
 var Beam = require('beam-client-node');
 var BeamSocket = require('beam-client-node/lib/ws');
 //Beam messages should be decoded for safety
 var ent = require('ent');
 
-var beam = new Beam();
-
 var accounts = JSON.parse(fs.readFileSync("accounts.json", "utf8"));
 var channels = JSON.parse(fs.readFileSync("channels.json", "utf8"));
-var wttwitch = {};
+var supportedAccounts = JSON.parse(fs.readFileSync("supportedAccounts.json", "utf8"));["smblive"];
 
-var usernames = {
-	beam: {},
-	twitch: {}
-};
+var beam = new Beam();
+var twitch = new tmi.client({
+	connection: {
+		reconnect: true
+	},
+	identity: {
+		username: accounts.twitch.user,
+		password: accounts.twitch.pass
+	},
+	channels: (function() {
+		var i = [];
+		for(var j = 0; j < channels.length; j++) {
+			i.push(channels[j].twitch);
+		}
+		return i;
+	}())
+});
+
+var wttwitch = {};
 
 var beamSockets = {};
 var beamIDs = {};
 var beamChannelNames = {};
 
-function removeHash(channelName) {
-	return channelName.replace('#','');
+function saveChannelsJson()
+{
+	fs.rename("channels.json", "channels-bak-" + +new Date() + ".json", function() {
+		fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
+	});
 }
 
 function closeBeamChat(channelName) {
@@ -41,73 +52,56 @@ function closeBeamChat(channelName) {
 	}
 }
 
-function onBeamMessage(channelName,data) {
-	var message = flattenBeamMessage(data.message.message);
+function unlinkChannels(twitchChannel, beamChannel, channelIndex) {
+	twitch.say(twitchChannel, "Chats unlinked.");
+	sendBeamMessage(beamChannel, "Chat unlinked.");
+	console.log(("Unlinked channels: " + beamChannel + " / " + twitchChannel).green);
+	sendDebugBeamMessage("Unlinked channels: " + beamChannel + " / " + twitchChannel);
+	
+	channels.splice(channelIndex, 1);
+	saveChannelsJson();
+
+	closeBeamChat(beamChannel);
+	twitch.part(twitchChannel);
+}
+
+function onBeamMessage(channel, data) {
 	var nick = data.user_name;
-	var beamIndex = chanIndex({prop: "beam", string: nick});
-	var to = channelName;
-	var text = message;
-	if(message === '!unlink' && beamIndex > -1) {
-		sendBeamMessage(nick, "Chats unlinked");
-		twitch.say("#" + channels[beamIndex].twitch, "Chats unlinked.");
+	var self = nick.toLowerCase() == accounts.beam.user.toLowerCase();
 
-		console.log(("Unlinked channels: " + nick + " / " + channels[beamIndex].twitch).green);
-		sendBeamMessage(accounts.beam.user, "Unlinked channels: " + nick + " / " + channels[beamIndex].twitch)
+	if(self) return;
 
-		disconnectChats({beam: nick, twitch: channels[beamIndex].twitch});
-
-		channels.splice(beamIndex, 1);
-		closeBeamChat(channelName);
-		if(channels[channelName]) {
-			twitch.part("#" + channels[beamIndex].twitch);
-		}
-		fs.rename("channels.json", "channels-bak-" + +new Date() + ".json", function() {
-			fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
-		});
-	}
-	if(text.slice(0, 5) == "!link" && !wttwitch[text.slice(6).toLowerCase()]) {
-		if(beamIndex == -1 && chanIndex({prop: "twitch", string: message.slice(6).toLowerCase()}) == -1) {
-			getUsername({site: "beam", name: nick}, function(nick) {
-				sendBeamMessage(accounts.beam.user, "@" + nick + ": Watching " + text.slice(6) + "'s chat on Twitch. Go to your channel and type \"!link\" to confirm.");
-			});
-			wttwitch[text.slice(6).toLowerCase()] = nick;
-			twitch.join("#" + text.slice(6).toLowerCase());
-			twitch.say("#" + text.slice(6).toLowerCase(), "I have been asked to link this Twitch chat with a Beam chat. If you requested this, type \"!link\".");
-			twitch.removeAllListeners("message#" + text.slice(6).toLowerCase());
-
-			twitch.on("message#" + text.slice(6).toLowerCase(), function(nick, text) {
-				if(text == "!link" && wttwitch[nick]) {
-					twitch.removeAllListeners("message#" + nick);
-					connectChats({beam: wttwitch[nick], twitch: nick}).then(function(){
-						sendBeamMessage(wttwitch[nick], "Chats Linked");
-						twitch.say("#" + nick, "Chats linked.");
-						console.log(("Linked channels: " + wttwitch[nick] + " / " + nick).green);
-						sendBeamMessage(accounts.beam.user, "Linked channels: " + wttwitch[nick] + " / " + nick);
-						channels.push({beam: wttwitch[nick], twitch: nick});
-						fs.rename("channels.json", "channels-bak-" + +new Date() + ".json", function() {
-							fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
-						});
-						delete wttwitch[nick];
-					});
-				}
-			});
-		} else {
-			getUsername({site: "beam", name: nick}, function(nick) {
-				sendBeamMessage(accounts.beam.user, "@" + nick + ": One or both of your channels are already linked. Type \"!unlink\" on Beam or Twitch if you want to unlink them.");
-			});
+	var message = flattenBeamMessage(data.message.message);
+	var beamIndex = chanIndex("beam", nick);
+	if(message === '!unlink') {
+		if(beamIndex > -1) {
+			var twitchChannel = channels[beamIndex].twitch;
+			return unlinkChannels(twitchChannel, nick, beamIndex);
 		}
 	}
-	if(nick != accounts.beam.user) {
-		if(channelName == accounts.beam.user) {
-			console.log(("    [beam" + channelName + "] " + nick + ": " + text).white);
-		} else {
-			console.log(("    [beam" + channelName + "] " + nick + ": " + text).grey);
-			getUsername({site: "beam", name: nick}, function(nick) {
-				sendBeamMessage(accounts.beam.user, "[<beam" + channelName + "> " + nick + "] " + text);
-			});
+	if(message.slice(0, 6) == "!link ") {
+		if(supportedAccounts.length > 0 && supportedAccounts.indexOf(nick.toLowerCase()) === -1) {
+			return sendBeamWhisper(channel, nick, "You are not permitted to perform this action.");
 		}
+		
+		var twitchUser = message.slice(6).toLowerCase();
+		var twitchChannel = "#" + twitchUser;
+		if(!wttwitch[twitchChannel]) {
+			if(beamIndex == -1 && chanIndex("twitch", twitchChannel) == -1) {
+				wttwitch[twitchChannel] = nick;
+				sendBeamWhisper(channel, nick, "Watching " + twitchUser + "'s chat on Twitch. Type or whisper \"!link\" from " + twitchUser + " to confirm.");
+				twitch.whisper(twitchUser, "I have been asked to link this Twitch chat with " + nick + "'s Beam chat. If you requested this type or whisper \"!link\" to confirm.");
+				twitch.join(twitchChannel);
+			} else {
+				sendBeamWhisper(channel, nick, "One or both of your channels are already linked. Type \"!unlink\" on Beam or Twitch if you want to unlink them.");
+			}
+		}
+	}
+	if(channel == accounts.beam.user) {
+		console.log(("    [beam" + channel + "] " + nick + ": " + message).white);
 	} else {
-		console.log(("    [beam] " + text).yellow);
+		console.log(("    [beam" + channel + "] " + nick + ": " + message).grey);
+		sendDebugBeamMessage("[<beam" + channel + "> " + nick + "] " + message);
 	}
 }
 /**
@@ -115,8 +109,8 @@ function onBeamMessage(channelName,data) {
  * @param  {String} channelName The closed Channel
  */
 function onSocketClose(channelName) {
-	console.log(("Disconnected from Beam channel: " + channelName +" attemping to reconnect.").yellow);
-	var i = chanIndex({prop: "beam", string: channelName});
+	console.log(("Disconnected from Beam channel: " + channelName).yellow);
+	var i = chanIndex("beam", channelName);
 	//Check if we still actually care about this channel. We might catch "close"
 	//events on a channel that has been !unliked.
 	//We also check if this is the account we are running under aka "StreamLink_"
@@ -145,10 +139,50 @@ function onSocketClose(channelName) {
 	socket.boot();
 }
 
+function onTwitchMessage(channel, userstate, message) {
+	var nick = userstate.username
+	var channelOwner = channel.toLowerCase() === "#" + nick;
+	
+	if (message === "!link" && channelOwner) {
+		var beamChannel = wttwitch[channel];
+		if (beamChannel) {
+			return connectChats(beamChannel, channel).then(function() {
+				sendBeamMessage(beamChannel, "Chats linked.");
+				twitch.say(channel, "Chats linked.");
+				console.log(("Linked channels: " + beamChannel + " / " + channel).green);
+				sendDebugBeamMessage("Linked channels: " + beamChannel + " / " + channel);
+				
+				channels.push({beam: beamChannel, twitch: channel});
+				saveChannelsJson();
+				
+				delete wttwitch[channel];
+			});
+		}
+	}
+	var twitchIndex = chanIndex("twitch", channel);
+	if(twitchIndex == -1) return;
+
+	var beamChannel = channels[twitchIndex].beam
+	if (message === "!unlink" && channelOwner) {
+		return unlinkChannels(channel, beamChannel, twitchIndex);
+	}
+
+	var displayName = userstate["display-name"];
+	switch(userstate["message-type"]) {
+		case "action":
+			sendBeamMessage(beamChannel, "[" + displayName + " " + message + "]");
+			break;
+		case "chat":
+			sendBeamMessage(beamChannel, "[" + displayName + "] " + message);
+			break;
+	}
+	console.log(("    [twitch" + channel + "] " + nick + ": " + message).grey);
+	sendDebugBeamMessage("[<twitch" + channel + "> " + displayName + "] " + message);
+};
+
 //To join a channel we need its id, then we need the ws address and an authkey.
 //This handles them all
 function joinChannel(channelName) {
-	channelName = removeHash(channelName);
 	//we need the channel id.
 	return beam.request('get', '/channels/' + channelName).bind(this)
 	.then(function(response) {
@@ -196,83 +230,29 @@ beam.use('password', {
 });
 
 //Connect to twitch
-var twitch = new irc.Client("irc.twitch.tv", accounts.twitch.user, {
-	port: 6667,
-	userName: accounts.twitch.user.toLowerCase(),
-	realName: accounts.twitch.user,
-	password: accounts.twitch.pass,
-	floodProtection: true,
-	floodProtectionDelay: 1500,
-	channels: (function() {
-		var i = ["#" + accounts.twitch.user];
-		for(var j = 0; j < channels.length; j++) {
-			i.push("#" + channels[j].twitch);
-		}
-		return i;
-	}())
-});
-//Prevent crashes, if there are no listeners to an "error" event it will crash
-twitch.addListener("error", function(message) {
-	console.log(("Twitch Error: ", message).red);
-});
+twitch.connect();
 
 // Functions for stuff.
-function chanIndex(i) {
+function chanIndex(site, channel) {
 	var toret = -1;
 	for(var j = 0; j < channels.length; j++) {
-		if(channels[j][i.prop] == i.string) {
+		if(channels[j][site] == channel) {
 			toret = j;
 		}
 	}
 	return toret;
 }
 
-function getUsername(i, callback) {
-	switch(i.site) {
-		case "beam":
-			// Beam sends us the username correctly capitalized etc
-			// we don't need to hit their limits
-			callback(i.name);
-			break;
-		case "twitch":
-			if(usernames.twitch[i.name]) {
-				callback(usernames.twitch[i.name]);
-			} else {
-				request("https://api.twitch.tv/kraken/users/" + i.name, function(error, response, body) {
-					if(!error && response.statusCode == 200) {
-						usernames.twitch[i.name] = JSON.parse(body).display_name;
-						callback(JSON.parse(body).display_name);
-					}
-				});
-			}
-			break;
-	}
-}
-
-function connectChats(i) {
-	twitch.on("message#" + i.twitch.toLowerCase(), function(nick, text) {
-		if(nick.toLowerCase() != accounts.twitch.user.toLowerCase()) {
-			getUsername({site: "twitch", name: nick}, function(nick) { // HIS NAME IS NICK!
-				sendBeamMessage(i.beam, "[" + nick + "] " + text);
-			});
-		}
-	});
-	return joinChannel(i.beam).then(function(){
-		beamSockets[i.beam].on("ChatMessage", function(data){
+function connectChats(beamChannel, twitchChannel) {
+	return joinChannel(beamChannel).then(function() {
+		beamSockets[beamChannel].on("ChatMessage", function(data) {
 			var nick = data.user_name;
 			var text = flattenBeamMessage(data.message.message);
 			if(nick.toLowerCase() != accounts.beam.user.toLowerCase()) {
-				getUsername({site: "beam", name: nick}, function(nick) { // HIS NAME IS ALSO NICK!
-					twitch.say("#" + i.twitch, "[" + nick + "] " + text);
-				});
+				twitch.say(twitchChannel, "[" + nick + "] " + text);
 			}
 		});
 	});
-}
-
-function disconnectChats(i) {
-	twitch.removeAllListeners("message#" + i.twitch);
-	closeBeamChat(i.beam);
 }
 
 //We need to delay this until after beam is logged in
@@ -280,20 +260,20 @@ function connectToChannels() {
 	// Connection logging and stuff.
 	for(var i = 0; i < channels.length; i++) {
 		console.log(("Trying to connect to channels: " + channels[i].beam + " / " + channels[i].twitch).white);
-		//Don't call .join here, the connections array passed in the IRC constructor above will handle that
-		twitch.once("join#" + channels[i].twitch, function(i) {
-			console.log(("Connected to Twitch channel: " + channels[i].twitch).magenta);
-		}.bind(this, i));
 		//Do manually connect to beam though because it does require some extra lifting
 		//TODO: Beam might have rate limits, If so delay the execution of this method
 		//by x ms
-		connectChats({beam: channels[i].beam, twitch: channels[i].twitch});
+		connectChats(channels[i].beam, channels[i].twitch);
 	}
 }
 
+twitch.on("join", function (channel, username, self) {
+	console.log(("Connected to Twitch channel: " + channel).magenta);
+});
+
 // Reconnect when disconnected
-twitch.on("part", function(channel, nick, reason, message) {
-	if(chanIndex({prop: "twitch", string: channel.slice(1)}) > -1) {
+twitch.on("part", function(channel, username, self) {
+	if(chanIndex("twitch", channel) > -1) {
 		console.log(("Reconnect to twitch" + channel + "...").yellow);
 		twitch.join(channel);
 	}
@@ -343,54 +323,34 @@ function flattenBeamMessage(message) {
 }
 
 //Beam.say is not longer valid, we need to find the correct socket and use that
-function sendBeamMessage(channel,message) {
+function sendBeamMessage(channel, message) {
 	var socket = beamSockets[channel];
 	if(socket) {
 		socket.call('msg',[message]);
 	}
 }
 
-//We should probably combine these tooo!
-//Unlink
-twitch.on("message", function(nick, to, text) {
-	var i = chanIndex({prop: "twitch", string: nick});
-	if(text == "!unlink" && i > -1) {
-		if(to != "#" + nick) {
-			twitch.say(to, "Chats unlinked.");
-		}
-		twitch.say("#" + nick, "Chats unlinked.");
-		sendBeamMessage(channels[i].beam, "Chats unlinked.");
-		console.log(("Unlinked channels: " + channels[i].beam + " / " + nick).green);
-		sendBeamMessage(accounts.twitch.user, "Unlinked channels: " + channels[i].beam + " / " + nick);
-
-		disconnectChats({beam: channels[i].beam, twitch: nick});
-
-		channels.splice(i, 1);
-		twitch.part("#" + nick);
-		if (channels[i]) {
-			closeBeamChat(channels[i].beam);
-		}
-		fs.rename("channels.json", "channels-bak-" + +new Date() + ".json", function() {
-			fs.writeFile("channels.json", JSON.stringify(channels), "utf8");
-		});
+function sendBeamWhisper(channel, nick, message) {
+	var socket = beamSockets[channel];
+	if(socket) {
+		socket.call('whisper',[nick, message]);
 	}
-});
+}
 
-// Log chat messages.
+function sendDebugBeamMessage(message) {
+	if(debug) {
+		sendBeamMessage(accounts.beam.user, message);
+	}
+}
 
-twitch.on("message", function(nick, to, text) {
-	if(to.slice(0, 1) === "#") {
-		if(nick.toLowerCase() !== accounts.twitch.user.toLowerCase()) {
-			if(to.toLowerCase() === "#" + accounts.twitch.user.toLowerCase()) {
-				console.log(("    [twitch" + to + "] " + nick + ": " + text).white);
-			} else {
-				console.log(("    [twitch" + to + "] " + nick + ": " + text).grey);
-				getUsername({site: "twitch", name: nick}, function(nick) {
-					sendBeamMessage(accounts.twitch.user, "[<twitch" + to + "> " + nick + "] " + text);
-				});
-			}
-		}
-	} else {
-		console.log(("    [twitch] " + text).yellow);
+twitch.on("message", function (channel, userstate, message, self) {
+	if(self) return;
+
+	switch(userstate["message-type"]) {
+			case "action":
+			case "chat":
+			case "whisper":
+					onTwitchMessage(channel, userstate, message);
+					break;
 	}
 });
