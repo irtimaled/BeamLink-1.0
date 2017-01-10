@@ -84,8 +84,8 @@ function onBeamMessage(channel, data) {
 		if(!wttwitch[twitchChannel]) {
 			if(beamIndex == -1 && chanIndex("twitch", twitchChannel) == -1) {
 				wttwitch[twitchChannel] = nick;
-				sendBeamWhisper(channel, nick, "Watching " + twitchUser + "'s chat on Twitch. Type or whisper \"!link\" from " + twitchUser + " to confirm.");
-				twitch.whisper(twitchUser, "I have been asked to link this Twitch chat with " + nick + "'s Beam chat. If you requested this type or whisper \"!link\" to confirm.");
+				sendBeamWhisper(channel, nick, "Watching " + twitchUser + "'s chat on Twitch. Confirmation instructions have been sent to " + twitchUser + ".");
+				twitch.whisper(twitchUser, "I have been asked to link your Twitch chat with " + nick + "'s Beam chat. Whisper \"!link\" if you wish to confirm.");
 				twitch.join(twitchChannel);
 			} else {
 				sendBeamWhisper(channel, nick, "One or both of your channels are already linked. Type \"!unlink\" on Beam or Twitch if you want to unlink them.");
