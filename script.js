@@ -1,8 +1,11 @@
+require('node-limited')();
+
 // Variables and requires and stuff.
 var colors = require("colors");
 var fs = require("fs");
 var request = require("request");
 var tmi = require("tmi.js");
+
 var debug = false;
 
 var Beam = require('beam-client-node');
@@ -65,12 +68,18 @@ function unlinkChannels(twitchChannel, beamChannel, channelIndex) {
 	twitch.part(twitchChannel);
 }
 
+function getChatLinkerInfo(site, channel) {
+	var username = site === "twitch" ? "@Irti" : "@IrtiPlays";
+	return "ChatLinker is a bot written by "+username+" that is linking the chats of this channel and "+site+" channel \""+channel.replace("#", "")+"\". Messages can be made more pretty in Chrome by using the ChatLinker Extension: \"http://bit.ly/2jE2gPM\".";
+}
+
 function onBeamMessage(channel, data) {
 	var nick = data.user_name;
 	var self = nick.toLowerCase() === accounts.beam.user.toLowerCase();
 
 	if(self) return;
 
+	var channelOwner = nick.toLowerCase() === channel.toLowerCase();
 	var message = flattenBeamMessage(data.message.message);
 	var beamIndex = chanIndex("beam", nick);
 	
@@ -99,7 +108,7 @@ function onBeamMessage(channel, data) {
 		var twitchChannel = channels[beamIndex].twitch;
 		return unlinkChannels(twitchChannel, nick, beamIndex);
 	}
-	
+
 	if(channel.toLowerCase() === accounts.beam.user.toLowerCase())
 		return console.log(("    [beam#" + channel + "] " + nick + ": " + message).white);
 
@@ -108,10 +117,24 @@ function onBeamMessage(channel, data) {
 		return;
 
 	var twitchChannel = channels[beamIndex].twitch;
+
+	if (message === "!chatlinker") {
+		return;
+
+		/*var infoMessage = getChatLinkerInfo("twitch", twitchChannel);
+		if(channelOwner) {
+			return sendBeamMessage(channel, infoMessage);
+		}
+		else
+		{
+			return sendBeamWhisper(channel, nick, infoMessage);
+		}*/
+	}
+
 	var displayName = (data.message.meta.me ? "/" : "") + nick;
 	twitch.say(twitchChannel, "[" + displayName + "] " + message);
-	console.log(("    [beam#" + channel + "] " + nick + ": " + message).grey);
-	sendDebugBeamMessage("[<beam#" + channel + "> " + nick + "] " + message);
+	console.log(("    [beam#" + channel + "] " + displayName + ": " + message).grey);
+	sendDebugBeamMessage("[<beam#" + channel + "> " + displayName + "] " + message);
 }
 
 /**
@@ -177,12 +200,24 @@ function onTwitchMessage(channel, userstate, message) {
 		return unlinkChannels(channel, beamChannel, twitchIndex);
 	}
 
+	if (message === "!chatlinker") {
+		return;
+		/*var infoMessage = getChatLinkerInfo("Beam", beamChannel);
+		if(channelOwner) {
+			return twitch.say(channel, infoMessage);
+		}
+		else
+		{
+			return twitch.whisper(nick, infoMessage);
+		}*/
+	}
+
 	var displayName = userstate["display-name"];
 	if(userstate["message-type"] == "action") {
 		displayName = "/"+displayName;
 	}
 	sendBeamMessage(beamChannel, "[" + displayName + "] " + message);
-	console.log(("    [twitch" + channel + "] " + nick + ": " + message).grey);
+	console.log(("    [twitch" + channel + "] " + displayName + ": " + message).grey);
 	sendDebugBeamMessage("[<twitch" + channel + "> " + displayName + "] " + message);
 };
 
